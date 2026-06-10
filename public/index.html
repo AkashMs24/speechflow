@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SpeechFlow - AI-Powered Speech Recognition</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #6366f1;
+            --primary-dark: #4f46e5;
+            --primary-light: #818cf8;
+            --secondary: #ec4899;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --dark: #1f2937;
+            --light: #f9fafb;
+            --border: #e5e7eb;
+            --text: #111827;
+            --text-muted: #6b7280;
+            --shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+            --shadow-lg: 0 25px 50px -12px rgba(0, 0, 0, 0.15);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            overflow-x: hidden;
+            color: var(--text);
+        }
+
+        .noise {
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            opacity: 0.03;
+            background-image: url('data:image/svg+xml,%3Csvg viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg"%3E%3Cfilter id="noiseFilter"%3E%3CfeTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="4" /%3E%3C/filter%3E%3Crect width="100%" height="100%" filter="url(%23noiseFilter)" /%3E%3C/svg%3E');
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .container {
+            position: relative;
+            z-index: 1;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        header {
+            text-align: center;
+            color: white;
+            margin-bottom: 3rem;
+            animation: slideDown 0.6s ease-out;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .logo-icon {
+            width: 50px;
+            height: 50px;
+            background: white;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            box-shadow: var(--shadow);
+        }
+
+        header h1 {
+            font-size: 3rem;
+            font-weight: 800;
+            margin-bottom: 0.5rem;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+        }
+
+        header p {
+            font-size: 1.1rem;
+            opacity: 0.95;
+            font-weight: 300;
+        }
+
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        @media (max-width: 768px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+            header h1 {
+                font-size: 2rem;
+            }
+        }
+
+        .card {
+            background: white;
+            border-radius: 16px;
+            padding: 2rem;
+            box-shadow: var(--shadow-lg);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            animation: fadeInUp 0.6s ease-out;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .card h2 {
+            font-size: 1.5rem;
+            margin-bottom: 1.5rem;
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .section {
+            margin-bottom: 2rem;
+        }
+
+        .section-title {
+            font-size: 0.9rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+            margin-bottom: 1rem;
+        }
+
+        /* Upload Area */
+        .upload-area {
+            border: 2px dashed var(--primary-light);
+            border-radius: 12px;
+            padding: 3rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.05), rgba(236, 72, 153, 0.05));
+        }
+
+        .upload-area:hover {
+            border-color: var(--primary);
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(236, 72, 153, 0.1));
+            transform: translateY(-2px);
+        }
+
+        .upload-area.active {
+            border-color: var(--success);
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(99, 102, 241, 0.05));
+        }
+
+        .upload-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        .upload-text {
+            margin-bottom: 0.5rem;
+        }
+
+        .upload-text strong {
+            color: var(--primary);
+            display: block;
+            font-size: 1.1rem;
+        }
+
+        .upload-text small {
+            color: var(--text-muted);
+            display: block;
+        }
+
+        /* Controls */
+        .controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 10px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white;
+            box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: var(--light);
+            color: var(--primary);
+            border: 2px solid var(--primary);
+        }
+
+        .btn-secondary:hover {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-small {
+            padding: 0.5rem 1rem;
+            font-size: 0.85rem;
+        }
+
+        .btn-danger {
+            background: var(--danger);
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+
+        .btn-success {
+            background: var(--success);
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #059669;
+        }
+
+        /* Recording Indicator */
+        .recording-indicator {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem;
+            background: linear-gradient(135deg, rgba(239, 68, 68, 0.1), rgba(248, 113, 113, 0.1));
+            border-radius: 10px;
+            border-left: 4px solid var(--danger);
+            margin-bottom: 1rem;
+            display: none;
+        }
+
+        .recording-indicator.active {
+            display: flex;
+            animation: slideDown 0.3s ease-out;
+        }
+
+        .recording-dot {
+            width: 12px;
+            height: 12px;
+            background: var(--danger);
+            border-radius: 50%;
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        /* Settings */
+        .settings-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        select, input {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 0.95rem;
+            transition: all 0.3s ease;
+            background: white;
+        }
+
+        select:focus, input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        }
+
+        /* Output */
+        .output-box {
+            background: var(--light);
+            border-radius: 10px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            border: 1px solid var(--border);
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .output-box h3 {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 1rem;
+        }
+
+        .transcript {
+            font-size: 1.05rem;
+            line-height: 1.6;
+            color: var(--text);
+        }
+
+        .transcript.empty {
+            color: var(--text-muted);
+            font-style: italic;
+        }
+
+        .segments {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .segment {
+            background: white;
+            padding: 0.75rem;
+            border-radius: 6px;
+            border-left: 3px solid var(--primary);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .segment:hover {
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            transform: translateX(4px);
+        }
+
+        .segment-time {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            font-weight: 600;
+        }
+
+        .segment-text {
+            font-size: 0.95rem;
+            color: var(--text);
+            margin-top: 0.25rem;
+        }
+
+        /* Stats */
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .stat {
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(236, 72, 153, 0.05));
+            padding: 1rem;
+            border-radius: 8px;
+            text-align: center;
+            border: 1px solid rgba(99, 102, 241, 0.2);
+        }
+
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--primary);
+        }
+
+        .stat-label {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-top: 0.25rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Loading */
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+            padding: 2rem;
+            color: var(--text-muted);
+        }
+
+        /* Export Buttons */
+        .export-buttons {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.5rem;
+        }
+
+        .btn-export {
+            padding: 0.5rem 0.75rem;
+            font-size: 0.8rem;
+            background: white;
+            border: 1px solid var(--border);
+            color: var(--primary);
+        }
+
+        .btn-export:hover {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+
+        /* Voice Reply Section */
+        .voice-reply-section {
+            background: linear-gradient(135deg, rgba(236, 72, 153, 0.1), rgba(99, 102, 241, 0.1));
+            border-radius: 12px;
+            padding: 1.5rem;
+            border: 1px solid rgba(236, 72, 153, 0.2);
+        }
+
+        .reply-controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .reply-output {
+            background: white;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-top: 1rem;
+            min-height: 80px;
+            border: 1px solid var(--border);
+        }
+
+        .reply-output p {
+            color: var(--text);
+            line-height: 1.6;
+        }
+
+        /* Toast Notifications */
+        .toast {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            background: white;
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            box-shadow: var(--shadow-lg);
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            z-index: 1000;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(100px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .toast.success {
+            border-left: 4px solid var(--success);
+        }
+
+        .toast.error {
+            border-left: 4px solid var(--danger);
+        }
+
+        .toast.info {
+            border-left: 4px solid var(--primary);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+
+            header h1 {
+                font-size: 2rem;
+            }
+
+            .card {
+                padding: 1.5rem;
+            }
+
+            .controls {
+                grid-template-columns: 1fr;
+            }
+
+            .stats {
+                grid-template-columns: 1fr;
+            }
+
+            .reply-controls {
+                grid-template-columns: 1fr;
+            }
+
+            .export-buttons {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+
+        /* Accessibility */
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border-width: 0;
+        }
+
+        /* Progress Bar */
+        .progress-bar {
+            width: 100%;
+            height: 4px;
+            background: var(--border);
+            border-radius: 2px;
+            overflow: hidden;
+            margin-bottom: 1rem;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary), var(--primary-light));
+            border-radius: 2px;
+            width: 0%;
+            transition: width 0.3s ease;
+            animation: shimmer 2s infinite;
+        }
+
+        @keyframes shimmer {
+            0% { opacity: 1; }
+            50% { opacity: 0.8; }
+            100% { opacity: 1; }
+        }
+
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="noise"></div>
+    <div class="container">
+        <header>
+            <div class="logo">
+                <div class="logo-icon">🎙️</div>
+                <div>
+                    <h1>SpeechFlow</h1>
+                </div>
+            </div>
+            <p>AI-Powered Speech Recognition & Voice Reply in Any Language</p>
+        </header>
+
+        <div class="main-grid">
+            <!-- Transcription Card -->
+            <div class="card">
+                <h2>🎤 Transcription</h2>
+
+                <!-- Upload Section -->
+                <div class="section">
+                    <div class="section-title">Upload or Record</div>
+                    <div class="upload-area" id="uploadArea">
+                        <div class="upload-icon">📁</div>
+                        <div class="upload-text">
+                            <strong>Drop your audio here</strong>
+                            <small>or click to browse (max 25MB)</small>
+                        </div>
+                    </div>
+                    <input type="file" id="audioInput" accept="audio/*,video/*" style="display: none;">
+                </div>
+
+                <!-- Recording Indicator -->
+                <div class="recording-indicator" id="recordingIndicator">
+                    <div class="recording-dot"></div>
+                    <span id="recordingTime">Recording...</span>
+                </div>
+
+                <!-- Controls -->
+                <div class="controls">
+                    <button class="btn btn-primary" id="recordBtn">
+                        <span>🔴</span> Record
+                    </button>
+                    <button class="btn btn-danger hidden" id="stopBtn">
+                        <span>⏹️</span> Stop
+                    </button>
+                    <button class="btn btn-primary" id="transcribeBtn" disabled>
+                        ✨ Transcribe
+                    </button>
+                    <button class="btn btn-secondary" id="clearBtn">
+                        🗑️ Clear
+                    </button>
+                </div>
+
+                <!-- Settings -->
+                <div class="section">
+                    <div class="section-title">Settings</div>
+                    <div class="settings-group">
+                        <div>
+                            <label for="modelSelect">Model</label>
+                            <select id="modelSelect">
+                                <option value="whisper-large-v3-turbo">⚡ Turbo (Fast)</option>
+                                <option value="whisper-large-v3" selected>🎯 Large (Accurate)</option>
+                                <option value="distil-whisper-large-v3-en">⚡⚡ Distil (Fastest)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="languageSelect">Language</label>
+                            <select id="languageSelect">
+                                <option value="">🌍 Auto Detect</option>
+                                <option value="en">🇺🇸 English</option>
+                                <option value="es">🇪🇸 Spanish</option>
+                                <option value="fr">🇫🇷 French</option>
+                                <option value="de">🇩🇪 German</option>
+                                <option value="it">🇮🇹 Italian</option>
+                                <option value="pt">🇵🇹 Portuguese</option>
+                                <option value="ru">🇷🇺 Russian</option>
+                                <option value="ja">🇯🇵 Japanese</option>
+                                <option value="zh">🇨🇳 Chinese</option>
+                                <option value="hi">🇮🇳 Hindi</option>
+                                <option value="ta">🇮🇳 Tamil</option>
+                                <option value="te">🇮🇳 Telugu</option>
+                                <option value="kn">🇮🇳 Kannada</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Stats -->
+                <div class="stats">
+                    <div class="stat">
+                        <div class="stat-value" id="wordCount">0</div>
+                        <div class="stat-label">Words</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value" id="duration">0s</div>
+                        <div class="stat-label">Duration</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value" id="processingTime">0s</div>
+                        <div class="stat-label">Time</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Output Card -->
+            <div class="card">
+                <h2>📝 Output</h2>
+
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+
+                <!-- Transcript -->
+                <div class="output-box">
+                    <h3>Transcript</h3>
+                    <div class="transcript empty" id="transcriptOutput">
+                        Your transcription will appear here...
+                    </div>
+                </div>
+
+                <!-- Export -->
+                <div class="section">
+                    <div class="section-title">Export As</div>
+                    <div class="export-buttons">
+                        <button class="btn btn-export btn-small" id="exportTxt" disabled>📄 TXT</button>
+                        <button class="btn btn-export btn-small" id="exportSrt" disabled>🎬 SRT</button>
+                        <button class="btn btn-export btn-small" id="exportJson" disabled>📊 JSON</button>
+                    </div>
+                </div>
+
+                <!-- Segments -->
+                <div class="section hidden" id="segmentsSection">
+                    <div class="section-title">Word Segments</div>
+                    <div class="segments" id="segmentsList"></div>
+                </div>
+
+                <!-- Language -->
+                <div class="section">
+                    <div class="section-title">Detected Language</div>
+                    <div class="stat">
+                        <div class="stat-value" id="detectedLanguage">-</div>
+                        <div class="stat-label">Language</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Voice Reply Section -->
+        <div class="card voice-reply-section">
+            <h2>🎧 AI Voice Reply</h2>
+
+            <div class="section">
+                <div class="section-title">Reply Settings</div>
+                <div class="reply-controls">
+                    <div>
+                        <label for="replyLanguage">Reply Language</label>
+                        <select id="replyLanguage">
+                            <option value="en">🇺🇸 English</option>
+                            <option value="es">🇪🇸 Spanish</option>
+                            <option value="fr">🇫🇷 French</option>
+                            <option value="de">🇩🇪 German</option>
+                            <option value="it">🇮🇹 Italian</option>
+                            <option value="pt">🇵🇹 Portuguese</option>
+                            <option value="ru">🇷🇺 Russian</option>
+                            <option value="ja">🇯🇵 Japanese</option>
+                            <option value="zh">🇨🇳 Chinese</option>
+                            <option value="hi">🇮🇳 Hindi</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="replyTone">Tone</label>
+                        <select id="replyTone">
+                            <option value="professional">Professional</option>
+                            <option value="friendly">Friendly</option>
+                            <option value="formal">Formal</option>
+                            <option value="casual">Casual</option>
+                        </select>
+                    </div>
+                    <div style="display: flex; flex-direction: column; justify-content: flex-end;">
+                        <button class="btn btn-primary" id="generateReplyBtn" disabled>
+                            ✨ Generate Reply
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="reply-output">
+                <p id="replyOutput" class="empty">Generated reply and audio will appear here...</p>
+                <button class="btn btn-success btn-small" id="playReplyBtn" style="margin-top: 0.5rem; display: none;">
+                    🔊 Play Reply
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
