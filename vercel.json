@@ -29,11 +29,5 @@
   ],
   "env": {
     "GROQ_API_KEY": "@groq_api_key"
-  },
-  "functions": {
-    "api/**/*.js": {
-      "memory": 1024,
-      "maxDuration": 60
-    }
   }
 }
