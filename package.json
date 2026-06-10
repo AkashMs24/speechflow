@@ -1,0 +1,35 @@
+{
+  "name": "speechflow",
+  "version": "1.0.0",
+  "description": "Production Speech-to-Text powered by Groq Whisper",
+  "scripts": {
+    "dev": "vercel dev",
+    "build": "echo 'No build step required'",
+    "vercel-build": "echo 'No build step required'",
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "form-data": "^4.0.0",
+    "multer": "^1.4.5-lts.1",
+    "node-fetch": "^2.7.0"
+  },
+  "devDependencies": {},
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "speech-to-text",
+    "transcription",
+    "groq",
+    "whisper",
+    "ai",
+    "multilingual",
+    "voice-reply"
+  ],
+  "author": "AKASH M S",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AkashMs24/speechflow.git"
+  }
+}
