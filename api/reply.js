@@ -1,6 +1,5 @@
-// AI Reply API - Groq Llama 3 for text generation
-// Voice playback is handled client-side via Web Speech API
-// =========================================================
+// AI Reply API - Groq Llama 3 for text, Web Speech API on frontend for voice
+// ===========================================================================
 
 import fetch from 'node-fetch';
 
@@ -28,6 +27,14 @@ export default async function handler(req, res) {
                 casual: 'Reply in a relaxed, conversational, casual manner.'
             };
 
+            // Map language code to language name so Llama replies in the right language
+            const languageNames = {
+                en: 'English', es: 'Spanish', fr: 'French', de: 'German',
+                it: 'Italian', pt: 'Portuguese', ru: 'Russian', ja: 'Japanese',
+                zh: 'Chinese', hi: 'Hindi', ta: 'Tamil', te: 'Telugu', kn: 'Kannada'
+            };
+            const replyLang = languageNames[language] || 'English';
+
             try {
                 const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
                     method: 'POST',
@@ -40,7 +47,7 @@ export default async function handler(req, res) {
                         messages: [
                             {
                                 role: 'system',
-                                content: `You are a helpful assistant. ${toneInstructions[tone] || toneInstructions.professional} Keep your reply under 3 sentences.`
+                                content: `You are a helpful assistant. ${toneInstructions[tone] || toneInstructions.professional} IMPORTANT: You MUST reply in ${replyLang} only. Keep your reply under 3 sentences.`
                             },
                             { role: 'user', content: text }
                         ],
@@ -59,7 +66,7 @@ export default async function handler(req, res) {
             }
         }
 
-        // Fallback if Groq is unavailable or key is missing
+        // Fallback if Groq unavailable
         if (!reply) {
             const fallbacks = {
                 professional: `Thank you for sharing that. I've noted your message and will address it accordingly.`,
@@ -70,7 +77,7 @@ export default async function handler(req, res) {
             reply = fallbacks[tone] || fallbacks.professional;
         }
 
-        // audio: null — voice playback is done client-side via Web Speech API
+        // audio: null — voice is handled client-side via Web Speech API
         return res.status(200).json({
             reply,
             language,
@@ -80,7 +87,7 @@ export default async function handler(req, res) {
         });
 
     } catch (error) {
-        console.error('Reply generation error:', error);
+        console.error('Reply error:', error);
         return res.status(500).json({ error: error.message || 'Reply generation failed' });
     }
 }
