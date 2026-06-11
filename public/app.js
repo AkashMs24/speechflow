@@ -10,6 +10,7 @@ class SpeechFlow {
         this.currentTranscription = null;
         this.isRecording = false;
         this.isProcessing = false;
+        this.voiceReplyText = null;
 
         this.initializeElements();
         this.attachEventListeners();
@@ -85,7 +86,6 @@ class SpeechFlow {
     }
 
     setupAudioContext() {
-        // Initialize audio context for recording
         this.audioContext = null;
     }
 
@@ -104,17 +104,12 @@ class SpeechFlow {
         e.preventDefault();
         e.stopPropagation();
         this.uploadArea.classList.remove('active');
-
         const files = e.dataTransfer.files;
-        if (files.length > 0) {
-            this.processFile(files[0]);
-        }
+        if (files.length > 0) this.processFile(files[0]);
     }
 
     handleFileSelect(e) {
-        if (e.target.files.length > 0) {
-            this.processFile(e.target.files[0]);
-        }
+        if (e.target.files.length > 0) this.processFile(e.target.files[0]);
     }
 
     processFile(file) {
@@ -122,7 +117,6 @@ class SpeechFlow {
             this.showToast('File too large! Max 25MB', 'error');
             return;
         }
-
         this.audioFile = file;
         this.uploadArea.classList.add('active');
         this.transcribeBtn.disabled = false;
@@ -141,22 +135,30 @@ class SpeechFlow {
     async startRecording() {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            this.mediaRecorder = new MediaRecorder(stream);
+
+            // Pick a MIME type the browser actually supports
+            const mimeType = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg'].find(
+                t => MediaRecorder.isTypeSupported(t)
+            ) || '';
+
+            this.mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
             this.audioChunks = [];
             this.isRecording = true;
             this.recordingStartTime = Date.now();
 
             this.mediaRecorder.ondataavailable = (event) => {
-                this.audioChunks.push(event.data);
+                if (event.data.size > 0) this.audioChunks.push(event.data);
             };
 
             this.mediaRecorder.onstop = () => {
-                const audioBlob = new Blob(this.audioChunks, { type: 'audio/wav' });
+                // Use the actual recorded MIME type so Groq gets a valid container
+                const type = this.mediaRecorder.mimeType || 'audio/webm';
+                const audioBlob = new Blob(this.audioChunks, { type });
                 this.audioFile = audioBlob;
                 this.transcribeBtn.disabled = false;
             };
 
-            this.mediaRecorder.start();
+            this.mediaRecorder.start(250); // collect chunks every 250ms
             this.recordBtn.classList.add('hidden');
             this.stopBtn.classList.remove('hidden');
             this.recordingIndicator.classList.add('active');
@@ -192,9 +194,7 @@ class SpeechFlow {
     }
 
     stopRecordingTimer() {
-        if (this.recordingTimer) {
-            clearInterval(this.recordingTimer);
-        }
+        if (this.recordingTimer) clearInterval(this.recordingTimer);
     }
 
     // ============= Transcription =============
@@ -209,7 +209,7 @@ class SpeechFlow {
         this.showProgress();
 
         const formData = new FormData();
-        formData.append('audio', this.audioFile);
+        formData.append('audio', this.audioFile, 'audio.webm');
         formData.append('model', this.modelSelect.value);
         if (this.languageSelect.value) {
             formData.append('language', this.languageSelect.value);
@@ -251,14 +251,10 @@ class SpeechFlow {
     }
 
     displayTranscription(result) {
-        // Display main transcript
         this.transcriptOutput.classList.remove('empty');
         this.transcriptOutput.textContent = result.text;
-
-        // Display language
         this.detectedLanguage.textContent = result.language ? result.language.toUpperCase() : 'Unknown';
 
-        // Display segments if available
         if (result.segments && result.segments.length > 0) {
             this.segmentsSection.classList.remove('hidden');
             this.segmentsList.innerHTML = result.segments.map((seg, idx) => `
@@ -275,10 +271,8 @@ class SpeechFlow {
     updateStats(result, processingTime) {
         const words = result.text.split(/\s+/).filter(w => w.length > 0).length;
         this.wordCount.textContent = words;
-
         const duration = result.duration ? Math.round(result.duration * 10) / 10 : 0;
         this.duration.textContent = duration + 's';
-
         this.processingTime.textContent = (processingTime / 1000).toFixed(1) + 's';
     }
 
@@ -316,7 +310,7 @@ class SpeechFlow {
 
             const result = await response.json();
             this.displayVoiceReply(result);
-            this.showToast('🎧 Reply generated!', 'success');
+            this.showToast('🎧 Reply generated! Click Play to hear it.', 'success');
         } catch (error) {
             this.showToast(`Error: ${error.message}`, 'error');
             console.error('Reply error:', error);
@@ -328,21 +322,49 @@ class SpeechFlow {
     displayVoiceReply(result) {
         this.replyOutput.classList.remove('empty');
         this.replyOutput.innerHTML = `<p>${result.reply}</p>`;
-        this.voiceReplyAudio = result.audio;
+        this.voiceReplyText = result.reply;   // store text for Web Speech API
         this.playReplyBtn.style.display = 'inline-flex';
     }
 
     playVoiceReply() {
-        if (this.voiceReplyAudio) {
-            const audio = new Audio(`data:audio/mp3;base64,${this.voiceReplyAudio}`);
-            audio.play();
-        }
+        if (!this.voiceReplyText) return;
+
+        // Cancel any ongoing speech first
+        window.speechSynthesis.cancel();
+
+        const utterance = new SpeechSynthesisUtterance(this.voiceReplyText);
+
+        // Map language codes to BCP-47 tags
+        const langMap = {
+            en: 'en-US', es: 'es-ES', fr: 'fr-FR', de: 'de-DE',
+            it: 'it-IT', pt: 'pt-PT', ru: 'ru-RU', ja: 'ja-JP',
+            zh: 'zh-CN', hi: 'hi-IN', ta: 'ta-IN', te: 'te-IN', kn: 'kn-IN'
+        };
+        utterance.lang = langMap[this.replyLanguage?.value] || 'en-US';
+        utterance.rate = 1.0;
+        utterance.pitch = 1.0;
+
+        // Visual feedback while speaking
+        this.playReplyBtn.textContent = '🔊 Speaking...';
+        this.playReplyBtn.disabled = true;
+
+        utterance.onend = () => {
+            this.playReplyBtn.innerHTML = '🔊 Play Reply';
+            this.playReplyBtn.disabled = false;
+        };
+
+        utterance.onerror = () => {
+            this.playReplyBtn.innerHTML = '🔊 Play Reply';
+            this.playReplyBtn.disabled = false;
+            this.showToast('Voice playback not supported in this browser', 'error');
+        };
+
+        window.speechSynthesis.speak(utterance);
     }
 
     // ============= Export =============
     exportAsText() {
         if (!this.currentTranscription) return;
-
         const text = this.currentTranscription.text;
         const element = document.createElement('a');
         element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(text));
@@ -359,14 +381,12 @@ class SpeechFlow {
             this.showToast('No segments available', 'error');
             return;
         }
-
         let srt = '';
         this.currentTranscription.segments.forEach((seg, idx) => {
             srt += `${idx + 1}\n`;
             srt += `${this.formatSRTTime(seg.start)} --> ${this.formatSRTTime(seg.end)}\n`;
             srt += `${seg.text}\n\n`;
         });
-
         const element = document.createElement('a');
         element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(srt));
         element.setAttribute('download', 'subtitles.srt');
@@ -388,7 +408,6 @@ class SpeechFlow {
 
     exportAsJSON() {
         if (!this.currentTranscription) return;
-
         const json = JSON.stringify(this.currentTranscription, null, 2);
         const element = document.createElement('a');
         element.setAttribute('href', 'data:application/json;charset=utf-8,' + encodeURIComponent(json));
@@ -402,8 +421,10 @@ class SpeechFlow {
 
     // ============= UI Helpers =============
     clear() {
+        window.speechSynthesis.cancel();
         this.audioFile = null;
         this.currentTranscription = null;
+        this.voiceReplyText = null;
         this.audioChunks = [];
         this.audioInput.value = '';
         this.uploadArea.classList.remove('active');
@@ -418,6 +439,8 @@ class SpeechFlow {
         this.replyOutput.classList.add('empty');
         this.replyOutput.textContent = 'Generated reply and audio will appear here...';
         this.playReplyBtn.style.display = 'none';
+        this.playReplyBtn.textContent = '🔊 Play Reply';
+        this.playReplyBtn.disabled = false;
         this.transcribeBtn.disabled = true;
         this.exportTxt.disabled = true;
         this.exportSrt.disabled = true;
@@ -439,11 +462,8 @@ class SpeechFlow {
     showToast(message, type = 'info') {
         const toast = document.createElement('div');
         toast.className = `toast ${type}`;
-        toast.innerHTML = `
-            <span>${message}</span>
-        `;
+        toast.innerHTML = `<span>${message}</span>`;
         document.body.appendChild(toast);
-
         setTimeout(() => {
             toast.style.animation = 'slideIn 0.3s ease-out reverse';
             setTimeout(() => toast.remove(), 300);
@@ -463,7 +483,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Prevent accidental page leave with unsaved data
 window.addEventListener('beforeunload', (e) => {
-    if (app.currentTranscription) {
+    if (app && app.currentTranscription) {
         e.preventDefault();
         e.returnValue = '';
     }
