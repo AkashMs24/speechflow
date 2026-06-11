@@ -4,6 +4,9 @@
 >
 > Powered by Groq Whisper (10–20× faster than OpenAI) + Llama 3 for intelligent replies.
 
+### 🌐 [Live Demo → voicescript-five.vercel.app](https://voicescript-five.vercel.app/)
+
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-voicescript--five.vercel.app-6366f1?logo=vercel&logoColor=white)](https://voicescript-five.vercel.app/)
 ![Node.js](https://img.shields.io/badge/Node.js->=18.0.0-green?logo=node.js)
 ![License](https://img.shields.io/badge/License-MIT-blue)
 ![Status](https://img.shields.io/badge/Status-Production%20Ready-success)
