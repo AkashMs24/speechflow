@@ -14,109 +14,57 @@ class SpeechFlow {
 
         this.initializeElements();
         this.attachEventListeners();
-        this.setupAudioContext();
     }
 
     initializeElements() {
-        // Upload
         this.uploadArea = document.getElementById('uploadArea');
         this.audioInput = document.getElementById('audioInput');
-
-        // Buttons
         this.recordBtn = document.getElementById('recordBtn');
         this.stopBtn = document.getElementById('stopBtn');
         this.transcribeBtn = document.getElementById('transcribeBtn');
         this.clearBtn = document.getElementById('clearBtn');
-
-        // Settings
         this.modelSelect = document.getElementById('modelSelect');
         this.languageSelect = document.getElementById('languageSelect');
-
-        // Output
         this.transcriptOutput = document.getElementById('transcriptOutput');
         this.wordCount = document.getElementById('wordCount');
         this.duration = document.getElementById('duration');
         this.processingTime = document.getElementById('processingTime');
         this.detectedLanguage = document.getElementById('detectedLanguage');
         this.progressFill = document.getElementById('progressFill');
-
-        // Export
         this.exportTxt = document.getElementById('exportTxt');
         this.exportSrt = document.getElementById('exportSrt');
         this.exportJson = document.getElementById('exportJson');
-
-        // Segments
         this.segmentsList = document.getElementById('segmentsList');
         this.segmentsSection = document.getElementById('segmentsSection');
-
-        // Voice Reply
         this.replyLanguage = document.getElementById('replyLanguage');
         this.replyTone = document.getElementById('replyTone');
         this.generateReplyBtn = document.getElementById('generateReplyBtn');
         this.replyOutput = document.getElementById('replyOutput');
         this.playReplyBtn = document.getElementById('playReplyBtn');
-
-        // Recording
         this.recordingIndicator = document.getElementById('recordingIndicator');
         this.recordingTime = document.getElementById('recordingTime');
     }
 
     attachEventListeners() {
-        // Upload
         this.uploadArea.addEventListener('click', () => this.audioInput.click());
-        this.uploadArea.addEventListener('dragover', (e) => this.handleDragOver(e));
-        this.uploadArea.addEventListener('dragleave', () => this.handleDragLeave());
-        this.uploadArea.addEventListener('drop', (e) => this.handleDrop(e));
-        this.audioInput.addEventListener('change', (e) => this.handleFileSelect(e));
-
-        // Recording & Transcription
+        this.uploadArea.addEventListener('dragover', (e) => { e.preventDefault(); this.uploadArea.classList.add('active'); });
+        this.uploadArea.addEventListener('dragleave', () => this.uploadArea.classList.remove('active'));
+        this.uploadArea.addEventListener('drop', (e) => { e.preventDefault(); this.uploadArea.classList.remove('active'); if (e.dataTransfer.files[0]) this.processFile(e.dataTransfer.files[0]); });
+        this.audioInput.addEventListener('change', (e) => { if (e.target.files[0]) this.processFile(e.target.files[0]); });
         this.recordBtn.addEventListener('click', () => this.startRecording());
         this.stopBtn.addEventListener('click', () => this.stopRecording());
         this.transcribeBtn.addEventListener('click', () => this.transcribe());
         this.clearBtn.addEventListener('click', () => this.clear());
-
-        // Export
         this.exportTxt.addEventListener('click', () => this.exportAsText());
         this.exportSrt.addEventListener('click', () => this.exportAsSRT());
         this.exportJson.addEventListener('click', () => this.exportAsJSON());
-
-        // Voice Reply
         this.generateReplyBtn.addEventListener('click', () => this.generateVoiceReply());
         this.playReplyBtn.addEventListener('click', () => this.playVoiceReply());
     }
 
-    setupAudioContext() {
-        this.audioContext = null;
-    }
-
-    // ============= Drag & Drop =============
-    handleDragOver(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        this.uploadArea.classList.add('active');
-    }
-
-    handleDragLeave() {
-        this.uploadArea.classList.remove('active');
-    }
-
-    handleDrop(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        this.uploadArea.classList.remove('active');
-        const files = e.dataTransfer.files;
-        if (files.length > 0) this.processFile(files[0]);
-    }
-
-    handleFileSelect(e) {
-        if (e.target.files.length > 0) this.processFile(e.target.files[0]);
-    }
-
+    // ============= File Handling =============
     processFile(file) {
-        if (file.size > 25 * 1024 * 1024) {
-            this.showToast('File too large! Max 25MB', 'error');
-            return;
-        }
+        if (file.size > 25 * 1024 * 1024) { this.showToast('File too large! Max 25MB', 'error'); return; }
         this.audioFile = file;
         this.uploadArea.classList.add('active');
         this.transcribeBtn.disabled = false;
@@ -124,11 +72,9 @@ class SpeechFlow {
     }
 
     formatFileSize(bytes) {
-        if (bytes === 0) return '0 Bytes';
-        const k = 1024;
-        const sizes = ['Bytes', 'KB', 'MB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+        if (!bytes) return '0 Bytes';
+        const i = Math.floor(Math.log(bytes) / Math.log(1024));
+        return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + ['Bytes','KB','MB'][i];
     }
 
     // ============= Recording =============
@@ -136,7 +82,7 @@ class SpeechFlow {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-            // Pick a MIME type the browser actually supports
+            // Pick the best supported MIME type
             const mimeType = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg'].find(
                 t => MediaRecorder.isTypeSupported(t)
             ) || '';
@@ -144,36 +90,30 @@ class SpeechFlow {
             this.mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
             this.audioChunks = [];
             this.isRecording = true;
-            this.recordingStartTime = Date.now();
 
-            this.mediaRecorder.ondataavailable = (event) => {
-                if (event.data.size > 0) this.audioChunks.push(event.data);
-            };
+            this.mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) this.audioChunks.push(e.data); };
 
             this.mediaRecorder.onstop = () => {
-                // Use the actual recorded MIME type so Groq gets a valid container
                 const type = this.mediaRecorder.mimeType || 'audio/webm';
-                const audioBlob = new Blob(this.audioChunks, { type });
-                this.audioFile = audioBlob;
+                this.audioFile = new Blob(this.audioChunks, { type });
                 this.transcribeBtn.disabled = false;
             };
 
-            this.mediaRecorder.start(250); // collect chunks every 250ms
+            this.mediaRecorder.start(250);
             this.recordBtn.classList.add('hidden');
             this.stopBtn.classList.remove('hidden');
             this.recordingIndicator.classList.add('active');
             this.startRecordingTimer();
             this.showToast('🎙️ Recording started...', 'info');
-        } catch (error) {
+        } catch (err) {
             this.showToast('Microphone access denied!', 'error');
-            console.error('Recording error:', error);
         }
     }
 
     stopRecording() {
         if (this.mediaRecorder && this.isRecording) {
             this.mediaRecorder.stop();
-            this.mediaRecorder.stream.getTracks().forEach(track => track.stop());
+            this.mediaRecorder.stream.getTracks().forEach(t => t.stop());
             this.isRecording = false;
             this.stopRecordingTimer();
             this.recordBtn.classList.remove('hidden');
@@ -184,66 +124,56 @@ class SpeechFlow {
     }
 
     startRecordingTimer() {
-        let seconds = 0;
+        let s = 0;
         this.recordingTimer = setInterval(() => {
-            seconds++;
-            const mins = Math.floor(seconds / 60);
-            const secs = seconds % 60;
-            this.recordingTime.textContent = `Recording: ${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+            s++;
+            const m = Math.floor(s / 60), sec = s % 60;
+            this.recordingTime.textContent = `Recording: ${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
         }, 1000);
     }
 
-    stopRecordingTimer() {
-        if (this.recordingTimer) clearInterval(this.recordingTimer);
-    }
+    stopRecordingTimer() { if (this.recordingTimer) clearInterval(this.recordingTimer); }
 
     // ============= Transcription =============
     async transcribe() {
-        if (!this.audioFile) {
-            this.showToast('Please upload or record audio first', 'error');
-            return;
-        }
+        if (!this.audioFile) { this.showToast('Please upload or record audio first', 'error'); return; }
 
         this.isProcessing = true;
         this.transcribeBtn.disabled = true;
         this.showProgress();
 
+        // Determine correct file extension from MIME type
+        const mime = this.audioFile.type || 'audio/webm';
+        const ext = mime.includes('ogg') ? 'ogg' : mime.includes('mp4') ? 'mp4' : mime.includes('wav') ? 'wav' : 'webm';
+
         const formData = new FormData();
-        formData.append('audio', this.audioFile, 'audio.webm');
-        formData.append('model', this.modelSelect.value);
+        formData.append('audio', this.audioFile, `audio.${ext}`);
+        formData.append('model', this.modelSelect.value);           // ← always send selected model
         if (this.languageSelect.value) {
-            formData.append('language', this.languageSelect.value);
+            formData.append('language', this.languageSelect.value); // ← always send selected language
         }
 
         try {
             const startTime = Date.now();
-            const response = await fetch('/api/transcribe', {
-                method: 'POST',
-                body: formData
-            });
+            const response = await fetch('/api/transcribe', { method: 'POST', body: formData });
 
             if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.error || 'Transcription failed');
+                const err = await response.json();
+                throw new Error(err.error || 'Transcription failed');
             }
 
             const result = await response.json();
-            const endTime = Date.now();
-
             this.currentTranscription = result;
             this.displayTranscription(result);
-            this.updateStats(result, endTime - startTime);
+            this.updateStats(result, Date.now() - startTime);
             this.showProgress(100);
-
             this.exportTxt.disabled = false;
             this.exportSrt.disabled = false;
             this.exportJson.disabled = false;
             this.generateReplyBtn.disabled = false;
-
             this.showToast('✨ Transcription complete!', 'success');
-        } catch (error) {
-            this.showToast(`Error: ${error.message}`, 'error');
-            console.error('Transcription error:', error);
+        } catch (err) {
+            this.showToast(`Error: ${err.message}`, 'error');
         } finally {
             this.isProcessing = false;
             this.transcribeBtn.disabled = false;
@@ -257,37 +187,28 @@ class SpeechFlow {
 
         if (result.segments && result.segments.length > 0) {
             this.segmentsSection.classList.remove('hidden');
-            this.segmentsList.innerHTML = result.segments.map((seg, idx) => `
+            this.segmentsList.innerHTML = result.segments.map(seg => `
                 <div class="segment" onclick="app.seekToSegment(${seg.start})">
-                    <div class="segment-time">
-                        ${this.formatTime(seg.start)} → ${this.formatTime(seg.end)}
-                    </div>
+                    <div class="segment-time">${this.formatTime(seg.start)} → ${this.formatTime(seg.end)}</div>
                     <div class="segment-text">${seg.text}</div>
                 </div>
             `).join('');
         }
     }
 
-    updateStats(result, processingTime) {
-        const words = result.text.split(/\s+/).filter(w => w.length > 0).length;
-        this.wordCount.textContent = words;
-        const duration = result.duration ? Math.round(result.duration * 10) / 10 : 0;
-        this.duration.textContent = duration + 's';
-        this.processingTime.textContent = (processingTime / 1000).toFixed(1) + 's';
+    updateStats(result, processingMs) {
+        this.wordCount.textContent = result.text.split(/\s+/).filter(w => w).length;
+        this.duration.textContent = (result.duration ? Math.round(result.duration * 10) / 10 : 0) + 's';
+        this.processingTime.textContent = (processingMs / 1000).toFixed(1) + 's';
     }
 
-    formatTime(seconds) {
-        const mins = Math.floor(seconds / 60);
-        const secs = Math.floor(seconds % 60);
-        return `${mins}:${secs.toString().padStart(2, '0')}`;
+    formatTime(s) {
+        return `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
     }
 
     // ============= Voice Reply =============
     async generateVoiceReply() {
-        if (!this.currentTranscription) {
-            this.showToast('Please transcribe audio first', 'error');
-            return;
-        }
+        if (!this.currentTranscription) { this.showToast('Please transcribe audio first', 'error'); return; }
 
         this.generateReplyBtn.disabled = true;
         this.showToast('🤖 Generating AI reply...', 'info');
@@ -298,22 +219,21 @@ class SpeechFlow {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     text: this.currentTranscription.text,
-                    language: this.replyLanguage.value,
+                    language: this.replyLanguage.value,   // ← sends selected reply language
                     tone: this.replyTone.value
                 })
             });
 
             if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.error || 'Reply generation failed');
+                const err = await response.json();
+                throw new Error(err.error || 'Reply generation failed');
             }
 
             const result = await response.json();
             this.displayVoiceReply(result);
-            this.showToast('🎧 Reply generated! Click Play to hear it.', 'success');
-        } catch (error) {
-            this.showToast(`Error: ${error.message}`, 'error');
-            console.error('Reply error:', error);
+            this.showToast('🎧 Reply ready! Click Play to hear it.', 'success');
+        } catch (err) {
+            this.showToast(`Error: ${err.message}`, 'error');
         } finally {
             this.generateReplyBtn.disabled = false;
         }
@@ -322,100 +242,79 @@ class SpeechFlow {
     displayVoiceReply(result) {
         this.replyOutput.classList.remove('empty');
         this.replyOutput.innerHTML = `<p>${result.reply}</p>`;
-        this.voiceReplyText = result.reply;   // store text for Web Speech API
+        this.voiceReplyText = result.reply;       // stored for Web Speech API
+        this.voiceReplyLang = result.language;    // stored for correct voice selection
         this.playReplyBtn.style.display = 'inline-flex';
     }
 
     playVoiceReply() {
         if (!this.voiceReplyText) return;
 
-        // Cancel any ongoing speech first
-        window.speechSynthesis.cancel();
+        window.speechSynthesis.cancel(); // stop any previous speech
 
         const utterance = new SpeechSynthesisUtterance(this.voiceReplyText);
 
-        // Map language codes to BCP-47 tags
+        // Full BCP-47 map so the browser picks a matching voice
         const langMap = {
             en: 'en-US', es: 'es-ES', fr: 'fr-FR', de: 'de-DE',
             it: 'it-IT', pt: 'pt-PT', ru: 'ru-RU', ja: 'ja-JP',
             zh: 'zh-CN', hi: 'hi-IN', ta: 'ta-IN', te: 'te-IN', kn: 'kn-IN'
         };
-        utterance.lang = langMap[this.replyLanguage?.value] || 'en-US';
+        utterance.lang = langMap[this.voiceReplyLang] || langMap[this.replyLanguage?.value] || 'en-US';
         utterance.rate = 1.0;
         utterance.pitch = 1.0;
 
-        // Visual feedback while speaking
+        // Try to find a voice that matches the language exactly
+        const voices = window.speechSynthesis.getVoices();
+        const matched = voices.find(v => v.lang === utterance.lang)
+            || voices.find(v => v.lang.startsWith(utterance.lang.split('-')[0]));
+        if (matched) utterance.voice = matched;
+
         this.playReplyBtn.textContent = '🔊 Speaking...';
         this.playReplyBtn.disabled = true;
 
-        utterance.onend = () => {
-            this.playReplyBtn.innerHTML = '🔊 Play Reply';
-            this.playReplyBtn.disabled = false;
-        };
-
+        utterance.onend = () => { this.playReplyBtn.textContent = '🔊 Play Reply'; this.playReplyBtn.disabled = false; };
         utterance.onerror = () => {
-            this.playReplyBtn.innerHTML = '🔊 Play Reply';
+            this.playReplyBtn.textContent = '🔊 Play Reply';
             this.playReplyBtn.disabled = false;
-            this.showToast('Voice playback not supported in this browser', 'error');
+            this.showToast('Voice not supported in this browser for this language', 'error');
         };
 
         window.speechSynthesis.speak(utterance);
     }
 
     // ============= Export =============
+    _download(content, filename, type) {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob([content], { type }));
+        a.download = filename;
+        a.click();
+    }
+
     exportAsText() {
         if (!this.currentTranscription) return;
-        const text = this.currentTranscription.text;
-        const element = document.createElement('a');
-        element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(text));
-        element.setAttribute('download', 'transcript.txt');
-        element.style.display = 'none';
-        document.body.appendChild(element);
-        element.click();
-        document.body.removeChild(element);
+        this._download(this.currentTranscription.text, 'transcript.txt', 'text/plain');
         this.showToast('📄 Downloaded as TXT', 'success');
     }
 
     exportAsSRT() {
-        if (!this.currentTranscription || !this.currentTranscription.segments) {
-            this.showToast('No segments available', 'error');
-            return;
-        }
-        let srt = '';
-        this.currentTranscription.segments.forEach((seg, idx) => {
-            srt += `${idx + 1}\n`;
-            srt += `${this.formatSRTTime(seg.start)} --> ${this.formatSRTTime(seg.end)}\n`;
-            srt += `${seg.text}\n\n`;
-        });
-        const element = document.createElement('a');
-        element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(srt));
-        element.setAttribute('download', 'subtitles.srt');
-        element.style.display = 'none';
-        document.body.appendChild(element);
-        element.click();
-        document.body.removeChild(element);
+        if (!this.currentTranscription?.segments) { this.showToast('No segments available', 'error'); return; }
+        const srt = this.currentTranscription.segments.map((seg, i) =>
+            `${i+1}\n${this.formatSRTTime(seg.start)} --> ${this.formatSRTTime(seg.end)}\n${seg.text}\n`
+        ).join('\n');
+        this._download(srt, 'subtitles.srt', 'text/plain');
         this.showToast('🎬 Downloaded as SRT', 'success');
     }
 
-    formatSRTTime(seconds) {
-        const date = new Date(seconds * 1000);
-        const hh = String(date.getUTCHours()).padStart(2, '0');
-        const mm = String(date.getUTCMinutes()).padStart(2, '0');
-        const ss = String(date.getUTCSeconds()).padStart(2, '0');
-        const ms = String(date.getUTCMilliseconds()).padStart(3, '0');
-        return `${hh}:${mm}:${ss},${ms}`;
+    formatSRTTime(s) {
+        const d = new Date(s * 1000);
+        return [d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds()].map(n => String(n).padStart(2,'0')).join(':')
+            + ',' + String(d.getUTCMilliseconds()).padStart(3,'0');
     }
 
     exportAsJSON() {
         if (!this.currentTranscription) return;
-        const json = JSON.stringify(this.currentTranscription, null, 2);
-        const element = document.createElement('a');
-        element.setAttribute('href', 'data:application/json;charset=utf-8,' + encodeURIComponent(json));
-        element.setAttribute('download', 'transcript.json');
-        element.style.display = 'none';
-        document.body.appendChild(element);
-        element.click();
-        document.body.removeChild(element);
+        this._download(JSON.stringify(this.currentTranscription, null, 2), 'transcript.json', 'application/json');
         this.showToast('📊 Downloaded as JSON', 'success');
     }
 
@@ -425,6 +324,7 @@ class SpeechFlow {
         this.audioFile = null;
         this.currentTranscription = null;
         this.voiceReplyText = null;
+        this.voiceReplyLang = null;
         this.audioChunks = [];
         this.audioInput.value = '';
         this.uploadArea.classList.remove('active');
@@ -451,40 +351,20 @@ class SpeechFlow {
 
     showProgress(percent = 0) {
         this.progressFill.style.width = percent + '%';
-        if (percent === 0) {
-            this.progressFill.style.width = '0%';
-            setTimeout(() => {
-                this.progressFill.style.width = '40%';
-            }, 100);
-        }
+        if (percent === 0) setTimeout(() => this.progressFill.style.width = '40%', 100);
     }
 
     showToast(message, type = 'info') {
-        const toast = document.createElement('div');
-        toast.className = `toast ${type}`;
-        toast.innerHTML = `<span>${message}</span>`;
-        document.body.appendChild(toast);
-        setTimeout(() => {
-            toast.style.animation = 'slideIn 0.3s ease-out reverse';
-            setTimeout(() => toast.remove(), 300);
-        }, 3000);
+        const t = document.createElement('div');
+        t.className = `toast ${type}`;
+        t.innerHTML = `<span>${message}</span>`;
+        document.body.appendChild(t);
+        setTimeout(() => { t.style.animation = 'slideIn 0.3s ease-out reverse'; setTimeout(() => t.remove(), 300); }, 3000);
     }
 
-    seekToSegment(time) {
-        this.showToast(`⏱️ Seeking to ${this.formatTime(time)}`, 'info');
-    }
+    seekToSegment(time) { this.showToast(`⏱️ Seeking to ${this.formatTime(time)}`, 'info'); }
 }
 
-// Initialize app on load
 let app;
-document.addEventListener('DOMContentLoaded', () => {
-    app = new SpeechFlow();
-});
-
-// Prevent accidental page leave with unsaved data
-window.addEventListener('beforeunload', (e) => {
-    if (app && app.currentTranscription) {
-        e.preventDefault();
-        e.returnValue = '';
-    }
-});
+document.addEventListener('DOMContentLoaded', () => { app = new SpeechFlow(); });
+window.addEventListener('beforeunload', (e) => { if (app?.currentTranscription) { e.preventDefault(); e.returnValue = ''; } });
