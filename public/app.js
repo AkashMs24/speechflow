@@ -244,7 +244,7 @@ class SpeechFlow {
                 <p style="margin:0;color:#111827;line-height:1.6">${result.reply}</p>
             </div>`;
 
-        this.voiceReplyText = result.reply;
+        this.voiceReplyText = result.translation;
         this.voiceReplyLang = result.language;
         this.playReplyBtn.style.display = 'inline-flex';
         this.playReplyBtn.textContent = '🔊 Play Reply';
