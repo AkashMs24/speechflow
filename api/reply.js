@@ -55,7 +55,7 @@ Respond ONLY in this exact JSON format, no extra text:
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                model: 'llama3-70b-8192',   // 70B is much better at multilingual tasks
+                model: 'llama-3.3-70b-versatile',   // updated: llama3-70b-8192 is retired
                 messages: [{ role: 'user', content: prompt }],
                 max_tokens: 400,
                 temperature: 0.3
