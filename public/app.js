@@ -1,48 +1,47 @@
-// SpeechFlow - Production-Grade Speech Recognition & Voice Reply
-// ============================================================
+// SpeechFlow — AI Speech Recognition & Voice Reply
+// ==================================================
 
 class SpeechFlow {
     constructor() {
         this.mediaRecorder = null;
         this.audioChunks = [];
-        this.recordingStartTime = null;
         this.recordingTimer = null;
         this.currentTranscription = null;
         this.isRecording = false;
-        this.isProcessing = false;
         this.voiceReplyText = null;
+        this.voiceReplyLang = null;
 
         this.initializeElements();
         this.attachEventListeners();
     }
 
     initializeElements() {
-        this.uploadArea = document.getElementById('uploadArea');
-        this.audioInput = document.getElementById('audioInput');
-        this.recordBtn = document.getElementById('recordBtn');
-        this.stopBtn = document.getElementById('stopBtn');
-        this.transcribeBtn = document.getElementById('transcribeBtn');
-        this.clearBtn = document.getElementById('clearBtn');
-        this.modelSelect = document.getElementById('modelSelect');
-        this.languageSelect = document.getElementById('languageSelect');
+        this.uploadArea       = document.getElementById('uploadArea');
+        this.audioInput       = document.getElementById('audioInput');
+        this.recordBtn        = document.getElementById('recordBtn');
+        this.stopBtn          = document.getElementById('stopBtn');
+        this.transcribeBtn    = document.getElementById('transcribeBtn');
+        this.clearBtn         = document.getElementById('clearBtn');
+        this.modelSelect      = document.getElementById('modelSelect');
+        this.languageSelect   = document.getElementById('languageSelect');
         this.transcriptOutput = document.getElementById('transcriptOutput');
-        this.wordCount = document.getElementById('wordCount');
-        this.duration = document.getElementById('duration');
-        this.processingTime = document.getElementById('processingTime');
+        this.wordCount        = document.getElementById('wordCount');
+        this.duration         = document.getElementById('duration');
+        this.processingTime   = document.getElementById('processingTime');
         this.detectedLanguage = document.getElementById('detectedLanguage');
-        this.progressFill = document.getElementById('progressFill');
-        this.exportTxt = document.getElementById('exportTxt');
-        this.exportSrt = document.getElementById('exportSrt');
-        this.exportJson = document.getElementById('exportJson');
-        this.segmentsList = document.getElementById('segmentsList');
-        this.segmentsSection = document.getElementById('segmentsSection');
-        this.replyLanguage = document.getElementById('replyLanguage');
-        this.replyTone = document.getElementById('replyTone');
+        this.progressFill     = document.getElementById('progressFill');
+        this.exportTxt        = document.getElementById('exportTxt');
+        this.exportSrt        = document.getElementById('exportSrt');
+        this.exportJson       = document.getElementById('exportJson');
+        this.segmentsList     = document.getElementById('segmentsList');
+        this.segmentsSection  = document.getElementById('segmentsSection');
+        this.replyLanguage    = document.getElementById('replyLanguage');
+        this.replyTone        = document.getElementById('replyTone');
         this.generateReplyBtn = document.getElementById('generateReplyBtn');
-        this.replyOutput = document.getElementById('replyOutput');
-        this.playReplyBtn = document.getElementById('playReplyBtn');
+        this.replyOutput      = document.getElementById('replyOutput');
+        this.playReplyBtn     = document.getElementById('playReplyBtn');
         this.recordingIndicator = document.getElementById('recordingIndicator');
-        this.recordingTime = document.getElementById('recordingTime');
+        this.recordingTime    = document.getElementById('recordingTime');
     }
 
     attachEventListeners() {
@@ -81,18 +80,12 @@ class SpeechFlow {
     async startRecording() {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-
-            // Pick the best supported MIME type
-            const mimeType = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg'].find(
-                t => MediaRecorder.isTypeSupported(t)
-            ) || '';
-
+            const mimeType = ['audio/webm;codecs=opus','audio/webm','audio/ogg'].find(t => MediaRecorder.isTypeSupported(t)) || '';
             this.mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
             this.audioChunks = [];
             this.isRecording = true;
 
             this.mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) this.audioChunks.push(e.data); };
-
             this.mediaRecorder.onstop = () => {
                 const type = this.mediaRecorder.mimeType || 'audio/webm';
                 this.audioFile = new Blob(this.audioChunks, { type });
@@ -127,7 +120,7 @@ class SpeechFlow {
         let s = 0;
         this.recordingTimer = setInterval(() => {
             s++;
-            const m = Math.floor(s / 60), sec = s % 60;
+            const m = Math.floor(s/60), sec = s % 60;
             this.recordingTime.textContent = `Recording: ${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
         }, 1000);
     }
@@ -138,34 +131,26 @@ class SpeechFlow {
     async transcribe() {
         if (!this.audioFile) { this.showToast('Please upload or record audio first', 'error'); return; }
 
-        this.isProcessing = true;
         this.transcribeBtn.disabled = true;
         this.showProgress();
 
-        // Determine correct file extension from MIME type
         const mime = this.audioFile.type || 'audio/webm';
-        const ext = mime.includes('ogg') ? 'ogg' : mime.includes('mp4') ? 'mp4' : mime.includes('wav') ? 'wav' : 'webm';
+        const ext  = mime.includes('ogg') ? 'ogg' : mime.includes('mp4') ? 'mp4' : mime.includes('wav') ? 'wav' : 'webm';
 
         const formData = new FormData();
         formData.append('audio', this.audioFile, `audio.${ext}`);
-        formData.append('model', this.modelSelect.value);           // ← always send selected model
-        if (this.languageSelect.value) {
-            formData.append('language', this.languageSelect.value); // ← always send selected language
-        }
+        formData.append('model', this.modelSelect.value);
+        if (this.languageSelect.value) formData.append('language', this.languageSelect.value);
 
         try {
-            const startTime = Date.now();
+            const t0 = Date.now();
             const response = await fetch('/api/transcribe', { method: 'POST', body: formData });
-
-            if (!response.ok) {
-                const err = await response.json();
-                throw new Error(err.error || 'Transcription failed');
-            }
+            if (!response.ok) throw new Error((await response.json()).error || 'Transcription failed');
 
             const result = await response.json();
             this.currentTranscription = result;
             this.displayTranscription(result);
-            this.updateStats(result, Date.now() - startTime);
+            this.updateStats(result, Date.now() - t0);
             this.showProgress(100);
             this.exportTxt.disabled = false;
             this.exportSrt.disabled = false;
@@ -175,7 +160,6 @@ class SpeechFlow {
         } catch (err) {
             this.showToast(`Error: ${err.message}`, 'error');
         } finally {
-            this.isProcessing = false;
             this.transcribeBtn.disabled = false;
         }
     }
@@ -185,33 +169,32 @@ class SpeechFlow {
         this.transcriptOutput.textContent = result.text;
         this.detectedLanguage.textContent = result.language ? result.language.toUpperCase() : 'Unknown';
 
-        if (result.segments && result.segments.length > 0) {
+        if (result.segments?.length > 0) {
             this.segmentsSection.classList.remove('hidden');
             this.segmentsList.innerHTML = result.segments.map(seg => `
-                <div class="segment" onclick="app.seekToSegment(${seg.start})">
+                <div class="segment">
                     <div class="segment-time">${this.formatTime(seg.start)} → ${this.formatTime(seg.end)}</div>
                     <div class="segment-text">${seg.text}</div>
-                </div>
-            `).join('');
+                </div>`).join('');
         }
     }
 
-    updateStats(result, processingMs) {
+    updateStats(result, ms) {
         this.wordCount.textContent = result.text.split(/\s+/).filter(w => w).length;
         this.duration.textContent = (result.duration ? Math.round(result.duration * 10) / 10 : 0) + 's';
-        this.processingTime.textContent = (processingMs / 1000).toFixed(1) + 's';
+        this.processingTime.textContent = (ms / 1000).toFixed(1) + 's';
     }
 
-    formatTime(s) {
-        return `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
-    }
+    formatTime(s) { return `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`; }
 
     // ============= Voice Reply =============
     async generateVoiceReply() {
         if (!this.currentTranscription) { this.showToast('Please transcribe audio first', 'error'); return; }
 
         this.generateReplyBtn.disabled = true;
-        this.showToast('🤖 Generating AI reply...', 'info');
+        this.generateReplyBtn.innerHTML = '<span class="spinner" style="border-color:rgba(255,255,255,.3);border-top-color:#fff;display:inline-block;width:16px;height:16px;border-width:2px;border-style:solid;border-radius:50%;animation:spin .8s linear infinite;margin-right:6px"></span> Generating...';
+        this.replyOutput.innerHTML = '<div class="loading"><div class="spinner"></div> Translating & generating reply...</div>';
+        this.playReplyBtn.style.display = 'none';
 
         try {
             const response = await fetch('/api/reply', {
@@ -219,52 +202,72 @@ class SpeechFlow {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     text: this.currentTranscription.text,
-                    language: this.replyLanguage.value,   // ← sends selected reply language
+                    language: this.replyLanguage.value,
                     tone: this.replyTone.value
                 })
             });
 
-            if (!response.ok) {
-                const err = await response.json();
-                throw new Error(err.error || 'Reply generation failed');
-            }
+            if (!response.ok) throw new Error((await response.json()).error || 'Reply generation failed');
 
             const result = await response.json();
             this.displayVoiceReply(result);
-            this.showToast('🎧 Reply ready! Click Play to hear it.', 'success');
+            this.showToast('🎧 Ready! Click Play to hear the reply.', 'success');
         } catch (err) {
+            this.replyOutput.textContent = 'Error generating reply. Please try again.';
             this.showToast(`Error: ${err.message}`, 'error');
         } finally {
             this.generateReplyBtn.disabled = false;
+            this.generateReplyBtn.innerHTML = '✨ Generate Reply';
         }
     }
 
     displayVoiceReply(result) {
-        this.replyOutput.classList.remove('empty');
-        this.replyOutput.innerHTML = `<p>${result.reply}</p>`;
-        this.voiceReplyText = result.reply;       // stored for Web Speech API
-        this.voiceReplyLang = result.language;    // stored for correct voice selection
+        const langLabels = {
+            en: 'English', es: 'Spanish', fr: 'French', de: 'German',
+            it: 'Italian', pt: 'Portuguese', ru: 'Russian', ja: 'Japanese',
+            zh: 'Chinese', hi: 'Hindi', ta: 'Tamil', te: 'Telugu', kn: 'Kannada'
+        };
+        const lang = langLabels[result.language] || result.language;
+
+        // Show translation block + reply block
+        this.replyOutput.innerHTML = `
+            <div style="margin-bottom:12px; padding:10px 12px; background:rgba(99,102,241,0.08); border-radius:8px; border-left:3px solid #6366f1;">
+                <div style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#6b7280;margin-bottom:4px;">
+                    📝 Translation (${lang})
+                </div>
+                <p style="margin:0;color:#111827;line-height:1.6">${result.translation}</p>
+            </div>
+            <div style="padding:10px 12px; background:rgba(16,185,129,0.08); border-radius:8px; border-left:3px solid #10b981;">
+                <div style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#6b7280;margin-bottom:4px;">
+                    🤖 AI Reply (${lang})
+                </div>
+                <p style="margin:0;color:#111827;line-height:1.6">${result.reply}</p>
+            </div>`;
+
+        this.voiceReplyText = result.reply;
+        this.voiceReplyLang = result.language;
         this.playReplyBtn.style.display = 'inline-flex';
+        this.playReplyBtn.textContent = '🔊 Play Reply';
+        this.playReplyBtn.disabled = false;
     }
 
     playVoiceReply() {
         if (!this.voiceReplyText) return;
 
-        window.speechSynthesis.cancel(); // stop any previous speech
+        window.speechSynthesis.cancel();
 
         const utterance = new SpeechSynthesisUtterance(this.voiceReplyText);
 
-        // Full BCP-47 map so the browser picks a matching voice
         const langMap = {
-            en: 'en-US', es: 'es-ES', fr: 'fr-FR', de: 'de-DE',
-            it: 'it-IT', pt: 'pt-PT', ru: 'ru-RU', ja: 'ja-JP',
-            zh: 'zh-CN', hi: 'hi-IN', ta: 'ta-IN', te: 'te-IN', kn: 'kn-IN'
+            en:'en-US', es:'es-ES', fr:'fr-FR', de:'de-DE',
+            it:'it-IT', pt:'pt-PT', ru:'ru-RU', ja:'ja-JP',
+            zh:'zh-CN', hi:'hi-IN', ta:'ta-IN', te:'te-IN', kn:'kn-IN'
         };
-        utterance.lang = langMap[this.voiceReplyLang] || langMap[this.replyLanguage?.value] || 'en-US';
+        utterance.lang = langMap[this.voiceReplyLang] || 'en-US';
         utterance.rate = 1.0;
         utterance.pitch = 1.0;
 
-        // Try to find a voice that matches the language exactly
+        // Find the best matching voice for the language
         const voices = window.speechSynthesis.getVoices();
         const matched = voices.find(v => v.lang === utterance.lang)
             || voices.find(v => v.lang.startsWith(utterance.lang.split('-')[0]));
@@ -277,7 +280,7 @@ class SpeechFlow {
         utterance.onerror = () => {
             this.playReplyBtn.textContent = '🔊 Play Reply';
             this.playReplyBtn.disabled = false;
-            this.showToast('Voice not supported in this browser for this language', 'error');
+            this.showToast('Voice not available for this language in your browser', 'error');
         };
 
         window.speechSynthesis.speak(utterance);
