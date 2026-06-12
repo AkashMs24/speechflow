@@ -52,6 +52,8 @@ export default async function handler(req, res) {
             contentType: file.mimetype || 'audio/webm',
         });
         formData.append('model', model);
+        // verbose_json is required for Groq to return the detected language
+        formData.append('response_format', 'verbose_json');
         if (language) {
             formData.append('language', language);
         }
